@@ -1,6 +1,7 @@
 ### ElasticSearch:
 
-es是一个开源的可拓展的全文检索引擎服务器,它可以近乎实时的存储,检索数据;本身拓展性好,可以拓展到上百台服务器,处理pb级别的数据.es使用java开发并使用lucene作为其核心来实现索引和搜索的功能,但是它通过简单的RestfulAPI和javaAPI来隐藏lucene的复杂性,从而让全文检索变得简单
+es是一个开源的可拓展的全文检索引擎服务器,它可以近乎实时的存储,检索数据;本身拓展性好,可以拓展到上百台服务器,处理pb级别的数据.
+es使用java开发并使用lucene作为其核心来实现索引和搜索的功能,但是它通过简单的RestfulAPI和javaAPI来隐藏lucene的复杂性,从而让全文检索变得简单
 
 **全文检索**:全文检索是利用倒排索引技术对需要搜索的数据进行处理,然后提供快速匹配的技术.其实全文检索还有另外一种专业定义,先创建索引然后对索引进行所搜的过程,就是全文检索
 
@@ -326,297 +327,69 @@ ElasticSearch无论时内置分析器还是自定义分析器,都由三部分组
 
    PUT {index}/_doc/{id} and POST {index}/_doc
 
-3. ##### 字段类型
+3. ##### 创建索引库结构
+    {
+    	"properties": {
+    		"baseInfo": {																	//两层文档目录  baseInfo和phoneList
+    			"properties": {	
+    				"id": {																	//主键
+    					"type": "keyword"
+    				},
+    				"birthday": {															//生日,因为是非标准的日期,可能会有各种格式,所以使用的text类型
+    					"type": "text",
+    					"fields": {
+    						"raw": {													
+    							"type": "icu_collation_keyword",							
+    							"language": "zh",
+    							"country": "CN"
+    						}
+    					},
+    					"analyzer": "ik_smart",												//ik分词器   ik_smart:粗粒度分词          ik_max_word:细粒度分词
+    					"fielddata": true													//text类型如果想要排序,需要增加该配置
+    				},
+    				"cnName": {
+    					"type": "text",
+    					"fields": {
+    						"raw": {
+    							"type": "icu_collation_keyword",							//中文排序配置
+    							"language": "zh",
+    							"country": "CN"
+    						}
+    					},
+    					"analyzer": "ik_smart",
+    					"fielddata": true
+    				},
+    				"isChinese": {
+    					"type": "keyword"													//枚举值,可以只存code ,如果该枚举需要分词检索,可以存msg,最好不要直接存枚举
+    				},
+    				"updateTime": {
+    					"type": "text",
+    					"fields": {
+    						"raw": {
+    							"type": "icu_collation_keyword",
+    							"language": "zh",
+    							"country": "CN"
+    						}
+    					},
+    					"analyzer": "ik_smart",
+    					"fielddata": true
+    				}
+    			}
+    		},
+    		"phoneList": {
+    			"properties": {
+    				"id": {
+    					"type": "long"
+    				},
+    				"number": {
+    					"type": "keyword"
+    				}
+    			}
+    		}
+    	}
+    }
 
-   1. 以下只列举几个常用的字段类型,具体内容可以在官方文档中查询
-
-      https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-types.html
-
-      - ###### string
-
-        1. text
-
-           用来索引这个文本的值,比如email,description,product,tags,address,hostnames,status code等,可以进行分词,但通常不能用来排序(可以设置"filedata":"ture",但会消耗大量内存)和聚合.主要用来对整个文本进行搜索
-
-        2. keyword
-
-           用来索引文本的内容,例如IDs, email addresses, hostnames, status codes, zip codes or tags.
-
-           通常被用来过滤,排序和聚合.keyword只能被用来搜索已经存在的值
-
-      - ###### numeric
-
-        ```console
-        PUT my_index
-        {
-          "mappings": {
-            "properties": {
-              "number_of_bytes": {
-                "type": "integer"
-              },
-              "time_in_seconds": {
-                "type": "float"
-              },
-              "price": {
-                "type": "scaled_float",
-                "scaling_factor": 100
-              }
-            }
-          }
-        }
-        ```
-
-        1. long
-        2. integer
-        3. short
-        4. byte
-        5. double
-        6. float
-        7. half_float
-        8. scaled_float
-
-      - ###### date
-
-        ```console
-        PUT my_index
-        {
-          "mappings": {
-            "properties": {
-              "date": {
-                "type": "date" 
-              }
-            }
-          }
-        }
-        
-        PUT my_index/_doc/1
-        { "date": "2015-01-01" } 
-        
-        PUT my_index/_doc/2
-        { "date": "2015-01-01T12:10:30Z" } 
-        
-        PUT my_index/_doc/3
-        { "date": 1420070400001 } 
-        
-        GET my_index/_search
-        {
-          "sort": { "date": "asc"} 
-        }
-        ```
-
-      - ###### date nanoseconds(纳秒)
-
-      - ###### boolean
-
-        ```console
-        PUT my_index
-        {
-          "mappings": {
-            "properties": {
-              "is_published": {
-                "type": "boolean"
-              }
-            }
-          }
-        }
-        
-        POST my_index/_doc/1
-        {
-          "is_published": "true" 
-        }
-        
-        GET my_index/_search
-        {
-          "query": {
-            "term": {
-              "is_published": true 
-            }
-          }
-        }
-        ```
-
-      - ###### binary
-
-        The `binary` type accepts a binary value as a [Base64](https://en.wikipedia.org/wiki/Base64) encoded string. The field is not stored by default and is not searchable:
-
-        ```console
-        PUT my_index
-        {
-          "mappings": {
-            "properties": {
-              "name": {
-                "type": "text"
-              },
-              "blob": {
-                "type": "binary"
-              }
-            }
-          }
-        }
-        
-        PUT my_index/_doc/1
-        {
-          "name": "Some binary blob",
-          "blob": "U29tZSBiaW5hcnkgYmxvYg==" 
-        }
-        ```
-
-      - ###### range
-
-        1. integer_range
-        2. float_range
-        3. long_range
-        4. date_range
-        5. ip_range
-
-      - ###### Complex 
-
-        1. object
-
-           JSON documents are hierarchical in nature: the document may contain inner objects which, in turn, may contain inner objects themselves:
-
-           ```console
-           PUT my_index/_doc/1
-           { 
-             "region": "US",
-             "manager": { 
-               "age":     30,
-               "name": { 
-                 "first": "John",
-                 "last":  "Smith"
-               }
-             }
-           }
-           ```
-
-           Internally, this document is indexed as a simple, flat list of key-value pairs, something like this:
-
-           ```js
-           {
-             "region":             "US",
-             "manager.age":        30,
-             "manager.name.first": "John",
-             "manager.name.last":  "Smith"
-           }
-           ```
-
-        2. nested
-
-           The `nested` type is a specialised version of the [`object`](https://www.elastic.co/guide/en/elasticsearch/reference/current/object.html) data type that allows arrays of objects to be indexed in a way that they can be queried independently of each other.
-
-           ```console
-           PUT my_index/_doc/1
-           {
-             "group" : "fans",
-             "user" : [ 
-               {
-                 "first" : "John",
-                 "last" :  "Smith"
-               },
-               {
-                 "first" : "Alice",
-                 "last" :  "White"
-               }
-             ]
-           }
-           ```
-
-      - ###### multi-fields
-
-        It is often useful to index the same field in different ways for different purposes. For instance, a `string` field could be mapped as a `text` field for full-text search, and as a `keyword` field for sorting or aggregations. 
-
-        ```console
-        PUT my_index
-        {
-          "mappings": {
-            "properties": {
-              "city": {
-                "type": "text",
-                "fields": {
-                  "raw": { 
-                    "type":  "keyword"
-                  }
-                }
-              }
-            }
-          }
-        }
-        
-        PUT my_index/_doc/1
-        {
-          "city": "New York"
-        }
-        
-        PUT my_index/_doc/2
-        {
-          "city": "York"
-        }
-        
-        GET my_index/_search
-        {
-          "query": {
-            "match": {
-              "city": "york" 
-            }
-          },
-          "sort": {
-            "city.raw": "asc" 
-          },
-          "aggs": {
-            "Cities": {
-              "terms": {
-                "field": "city.raw" 
-              }
-            }
-          }
-        }
-        ```
-
-        ### Multi-fields with multiple analyzers[edit](https://github.com/elastic/elasticsearch/edit/7.8/docs/reference/mapping/params/multi-fields.asciidoc)
-
-        Another use case of multi-fields is to analyze the same field in different ways for better relevance. For instance we could index a field with the [`standard` analyzer](https://www.elastic.co/guide/en/elasticsearch/reference/current/analysis-standard-analyzer.html) which breaks text up into words, and again with the [`english` analyzer](https://www.elastic.co/guide/en/elasticsearch/reference/current/analysis-lang-analyzer.html#english-analyzer) which stems words into their root form:
-
-        ```console
-        PUT my_index
-        {
-          "mappings": {
-            "properties": {
-              "text": { 
-                "type": "text",
-                "fields": {
-                  "english": { 
-                    "type":     "text",
-                    "analyzer": "english"
-                  }
-                }
-              }
-            }
-          }
-        }
-        
-        PUT my_index/_doc/1
-        { "text": "quick brown fox" } 
-        
-        PUT my_index/_doc/2
-        { "text": "quick brown foxes" } 
-        
-        GET my_index/_search
-        {
-          "query": {
-            "multi_match": {
-              "query": "quick brown foxes",
-              "fields": [ 
-                "text",
-                "text.english"
-              ],
-              "type": "most_fields" 
-            }
-          }
-        }
-        ```
-
-   ###### 
-
+    
 4. ##### 字段定义属性
 
    字段的datatype定义了如何索引存储字段值,还有一些属性可以让我们根据需要来覆盖默认的值或进行特别的定义,具体内容可查阅官方文档:https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-params.html

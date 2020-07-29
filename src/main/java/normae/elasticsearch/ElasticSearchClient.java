@@ -1,9 +1,10 @@
 package normae.elasticsearch;
 
+import cn.hutool.json.JSON;
 import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import lombok.extern.slf4j.Slf4j;
-import normae.bo.IndexBo;
-import normae.bo.QueryBo;
+import normae.bo.*;
 import org.apache.http.HttpHost;
 import org.elasticsearch.action.DocWriteRequest;
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
@@ -55,6 +56,7 @@ import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightField;
 import org.elasticsearch.search.sort.SortOrder;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.json.GsonJsonParser;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -84,96 +86,42 @@ public class ElasticSearchClient {
      */
     private RestHighLevelClient client;
 
+    private static String indexName="test";
     /**
      * 节点请求方案
      */
     private final String HTTP_HOST_SCHEME = "http";
 
-    /**
-     * 全局默认类型
-     */
-    public static final String DEFAULT_TYPE = "_doc";
+  public static void main(String[] args) throws IOException {
 
-    public static void main(String[] args) throws IOException {
+      /**
+       * 创建索引库结构
+       */
+      ElasticSearchClient elasticSearchClient =new ElasticSearchClient();
+      String json ="{\"properties\":{\"baseInfo\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"birthday\":{\"type\":\"text\",\"fields\":{\"raw\":{\"type\":\"icu_collation_keyword\",\"language\":\"zh\",\"country\":\"CN\"}},\"analyzer\":\"ik_smart\",\"fielddata\":true},\"cnName\":{\"type\":\"text\",\"fields\":{\"raw\":{\"type\":\"icu_collation_keyword\",\"language\":\"zh\",\"country\":\"CN\"}},\"analyzer\":\"ik_smart\",\"fielddata\":true},\"isChinese\":{\"type\":\"keyword\"},\"updateTime\":{\"type\":\"text\",\"fields\":{\"raw\":{\"type\":\"icu_collation_keyword\",\"language\":\"zh\",\"country\":\"CN\"}},\"analyzer\":\"ik_smart\",\"fielddata\":true}}},\"phoneList\":{\"properties\":{\"id\":{\"type\":\"long\"},\"number\":{\"type\":\"keyword\"}}}}}";
+      elasticSearchClient.createIndex(indexName,json);
 
-        ElasticSearchClient elasticSearchClient = new ElasticSearchClient();
+      /**
+       * 删除索引库
+       */
+      elasticSearchClient.deleteIndex(indexName);
 
-        /**
-         * 创建索引
-         */
-//        String json = "{\"properties\":{\"city\":{\"type\":\"text\",\"analyzer\":\"ik_max_word\",\"fields\":{\"raw\":{\"type\":\"icu_collation_keyword\",\"language\":\"zh\",\"country\":\"CN\",\"index\":true}}}}}";
-//        elasticSearchClient.createIndex("ysg6", json);
+      /**
+       * 检测索引库是否存在
+       */
+      elasticSearchClient.indexExists(indexName);
 
-        /**
-         * 根据id查询文档
-         */
-        //elasticSearchClient.getIndexDoc("ysg","1");
+      /**
+       * 导入数据
+       */
+      BaseInfo baseInfo1 =new BaseInfo(1L,"2019-02-13","张三",1,"2020-03-25");
+      Phone phone1=new Phone(1L,"18765909999");
+      JsonBo jsonBo1=new JsonBo();
+      jsonBo1.setBaseInfo(baseInfo1);
+      jsonBo1.setPhoneList(phone1);
+      elasticSearchClient.addDoc(indexName, JSONUtil.toJsonStr(jsonBo1));
 
-
-        /**
-         * 单个索引库条件查询文档
-         */
-        //elasticSearchClient.searchConditionDoc("ysg1", "baseInfo.personalProfileOrig", "고려대학교", 1);
-
-        /**
-         * 多重条件查询(或)
-         */
-//        List<QueryBo> queryBos = new ArrayList<>();
-//        QueryBo queryBo1 = new QueryBo();
-//        queryBo1.setKey("baseInfo.personalProfileHand");
-//        queryBo1.setValue("马万·加布里");
-//        queryBos.add(queryBo1);
-//        QueryBo queryBo2 = new QueryBo();
-//        queryBo2.setKey("baseInfo.personalProfileOrig");
-//        queryBo2.setValue("배제고등학교");
-//        queryBos.add(queryBo2);
-//        elasticSearchClient.multiSearchDoc("ysg1", queryBos);
-
-        /**
-         * 多个索引库的字段查询
-         */
-        //elasticSearchClient.fieldSearch("baseInfo.personalProfileOrig",new String[]{"ysg","ysg1"});
-
-        /**
-         * 文档统计查询
-         */
-        //elasticSearchClient.countSearch("ysg1");
-
-        /**
-         * 索引库是否存在
-         */
-        //elasticSearchClient.indexExists("ysg1");
-
-        /**
-         * 查询索引库中所有数据
-         */
-        //elasticSearchClient.searchIndex(new String[]{"ysg6"});
-
-        /**
-         * 文档排序查询
-         */
-        //elasticSearchClient.orderSearch("my_index","city.raw",SortOrder.DESC);
-
-
-        /**
-         * 删除索引库
-         */
-        //elasticSearchClient.deleteIndex("ysg11");
-
-        /**
-         * 新增文档
-         */
-        JSONObject jsonObject1 =new JSONObject();
-        jsonObject1.put("city","你像风一样自由");
-        //jsonObject1.put("name.raw","爱你中华人民共和国不需要理由");
-        elasticSearchClient.addDoc("ysg6",jsonObject1.toString());
-
-        /**
-         * 匹配查询
-         */
-        //elasticSearchClient.matchDoc("ysg5", "name", "理由");
-    }
-
+  }
 
     public ElasticSearchClient() {
 
@@ -230,12 +178,6 @@ public class ElasticSearchClient {
             log.info("创建索引库响应结果[{}]", response.toString());
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                this.client.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
         return response;
     }
@@ -274,12 +216,6 @@ public class ElasticSearchClient {
             log.info("删除索引响应结果[{}]", deleteIndexResponse);
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                client.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
         return deleteIndexResponse;
     }
@@ -299,12 +235,6 @@ public class ElasticSearchClient {
             log.info("查看索引库是否存在响应结果[{}]", exists);
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                client.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
         return exists;
     }
@@ -324,12 +254,6 @@ public class ElasticSearchClient {
             log.info("查看索引库响应结果[{}]", openIndexResponse);
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                client.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
         return openIndexResponse;
     }
@@ -349,12 +273,6 @@ public class ElasticSearchClient {
             log.info("查看索引库响应结果[{}]", closeIndexResponse);
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                client.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
         return closeIndexResponse;
     }
@@ -383,12 +301,6 @@ public class ElasticSearchClient {
             log.info("创建索引库并插入一条文档响应结果[{}]", response);
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                client.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
         return response;
     }
@@ -434,12 +346,6 @@ public class ElasticSearchClient {
             System.out.println("响应结果: " + index);
         } catch (IOException e) {
             e.printStackTrace();
-        }finally {
-            try {
-                client.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
     }
 
@@ -466,12 +372,6 @@ public class ElasticSearchClient {
             log.info("全文检索响应结果[{}]", response);
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                client.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
         return response;
     }
@@ -494,12 +394,6 @@ public class ElasticSearchClient {
             log.info("查询某条文档是否存在响应结果");
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                client.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
         return exists;
     }
@@ -525,12 +419,6 @@ public class ElasticSearchClient {
             log.info("删除一条文档响应结果[{}]", response);
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                client.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
         return response;
     }
@@ -556,12 +444,6 @@ public class ElasticSearchClient {
             log.info("更新文档响应结果[{}]", response);
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                client.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
         return response;
     }
@@ -587,12 +469,6 @@ public class ElasticSearchClient {
             log.info("批量操作文档,响应结果[{}]", responses);
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                client.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
         return responses;
     }
@@ -624,12 +500,6 @@ public class ElasticSearchClient {
             log.info("批量获取文档响应结果[{}]", response);
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                client.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
         return response;
     }
@@ -652,12 +522,6 @@ public class ElasticSearchClient {
             log.info("查询索引响应结果[{}]", response);
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                client.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
         return response;
     }
@@ -696,12 +560,6 @@ public class ElasticSearchClient {
             log.info("排序查询响应结果[{}]", response);
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                client.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
         return response;
     }
@@ -743,12 +601,6 @@ public class ElasticSearchClient {
             log.info("分页查询响应结果[{}]", response);
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                client.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
         return response;
     }
@@ -813,12 +665,6 @@ public class ElasticSearchClient {
             }
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                client.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
         return response;
     }
@@ -852,12 +698,6 @@ public class ElasticSearchClient {
             log.info("滚动搜索响应结果[{}]", response);
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                client.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
         return response;
     }
@@ -889,13 +729,6 @@ public class ElasticSearchClient {
             log.info("单条件查询索引库结果[{}]", response);
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                client.close();
-            } catch (IOException e) {
-                log.error("ElasticSearch客户端关闭连接失败");
-                e.printStackTrace();
-            }
         }
         return response;
     }
@@ -928,12 +761,6 @@ public class ElasticSearchClient {
             log.info("多条件查询响应结果[{}]", response);
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                client.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
         return response;
     }
@@ -955,12 +782,6 @@ public class ElasticSearchClient {
             log.info(" 在多个索引库中查询某字段响应结果[{}]", response);
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                client.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
         return response;
     }
@@ -985,12 +806,6 @@ public class ElasticSearchClient {
             log.info("统计查询响应结果[{}]", countResponse);
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                client.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
         return countResponse;
     }
